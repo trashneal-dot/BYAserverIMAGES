@@ -122,7 +122,7 @@ namespace SkengSkinManager
                 }
 
                 case "addSource":
-                    return await AddSource((string)a["input"]);
+                    return await AddSource((string)a["input"], (bool?)a["catalogFilter"] ?? true);
 
                 case "ensureImages":
                     return await EnsureImages(a["items"] as JArray);
@@ -156,7 +156,10 @@ namespace SkengSkinManager
         }
 
         // Resolve a collection link/single link/bare id -> resolved skin entries.
-        private async Task<object> AddSource(string input)
+        // When catalogFilter is on, skins whose item tag doesn't resolve to a
+        // server catalog item (ShortnameMap) are silently dropped — only what we
+        // actually use survives. The dropped titles are reported back.
+        private async Task<object> AddSource(string input, bool catalogFilter)
         {
             var id = Steam.ParseId(input);
             if (id == null) throw new Exception("No workshop id found in: " + input);
@@ -165,11 +168,21 @@ namespace SkengSkinManager
             var ids = children.Count > 0 ? children : new List<string> { id };
             var details = await Steam.GetDetails(ids);
 
-            // Cache every preview image up front (the one acceptable "loading"
-            // moment); browsing afterwards is instant from cache.skin.
-            await Task.WhenAll(details.Select(d => ImageCache.Ensure(d.Id, d.PreviewUrl)));
+            var dropped = new List<string>();
+            var kept = new List<Steam.Detail>();
+            foreach (var d in details)
+            {
+                if (catalogFilter && !ShortnameMap.IsCatalogItem(d.Tags))
+                    dropped.Add(d.Title ?? d.Id);
+                else
+                    kept.Add(d);
+            }
 
-            var skins = details.Select(d =>
+            // Cache preview images only for kept skins (the one acceptable
+            // "loading" moment); browsing afterwards is instant from cache.skin.
+            await Task.WhenAll(kept.Select(d => ImageCache.Ensure(d.Id, d.PreviewUrl)));
+
+            var skins = kept.Select(d =>
             {
                 var sn = ShortnameMap.Suggest(d.Tags);
                 return new SkinEntry
@@ -186,7 +199,14 @@ namespace SkengSkinManager
                 };
             }).ToList();
 
-            return new { isCollection = children.Count > 0, count = skins.Count, skins };
+            return new
+            {
+                isCollection = children.Count > 0,
+                count = skins.Count,
+                dropped = dropped.Count,
+                droppedTitles = dropped.Take(40).ToList(),
+                skins,
+            };
         }
 
         private async Task<object> EnsureImages(JArray items)

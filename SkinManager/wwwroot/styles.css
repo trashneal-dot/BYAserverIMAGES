@@ -79,7 +79,13 @@ input:focus, select:focus { border-color: var(--accent); }
 .side-foot b { color: var(--text); }
 
 #content { flex: 1; overflow-y: auto; padding: 14px; }
-#grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 12px; }
+.gridtools { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.zoomwrap { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+.zlabel { font-size: 11px; color: var(--faint); letter-spacing: .5px; }
+#zoom { width: 140px; accent-color: var(--accent); }
+.chk { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--dim); white-space: nowrap; }
+.chk input { accent-color: var(--accent); }
+#grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tile, 158px), 1fr)); gap: 12px; }
 .empty { text-align: center; color: var(--text); margin-top: 12vh; }
 .empty p { margin: 6px 0; }
 
@@ -90,8 +96,15 @@ input:focus, select:focus { border-color: var(--accent); }
   content-visibility: auto; contain-intrinsic-size: 200px;
   display: flex; flex-direction: column;
 }
+.tile { position: relative; }
 .tile:hover { border-color: var(--accent); }
 .tile.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.tile.checked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.tcheck {
+  position: absolute; top: 6px; left: 6px; width: 18px; height: 18px; z-index: 3;
+  accent-color: var(--accent); cursor: pointer; opacity: 0;
+}
+.tile:hover .tcheck, .tile.checked .tcheck { opacity: 1; }
 .tile .thumb {
   width: 100%; aspect-ratio: 1/1; background: #0e0e12 center/cover no-repeat;
   display: flex; align-items: center; justify-content: center; color: var(--faint); font-size: 11px;
@@ -168,7 +181,7 @@ input:focus, select:focus { border-color: var(--accent); }
 ::-webkit-scrollbar-thumb:hover { background: var(--border); }
 
 /* ── type filter bar ─────────────────────────────────────── */
-.typebar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.typebar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; flex: 1; }
 .tchip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 11px; font-size: 12px; border-radius: 14px;
@@ -194,3 +207,13 @@ input:focus, select:focus { border-color: var(--accent); }
 .gcnt { font-size: 11px; color: var(--faint); white-space: nowrap; flex: none; }
 .gbtn { padding: 2px 8px; flex: none; }
 .gbtn:disabled { opacity: .35; cursor: default; border-color: var(--border); }
+
+/* ── bulk action bar ─────────────────────────────────────── */
+.bulkbar {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; z-index: 55;
+  background: var(--raised); border: 1px solid var(--accent); border-radius: var(--radius);
+  padding: 8px 14px; box-shadow: 0 4px 18px rgba(0,0,0,.45);
+}
+.bulkbar .bcount { font-weight: 600; white-space: nowrap; }
+.bulkbar select { min-width: 130px; }

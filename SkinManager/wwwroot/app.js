@@ -26,6 +26,7 @@ let activeType = "all";
 let query = "";
 let missions = null;          // { path, missions:[], skinUsage:{id:[keys]} }
 let selectedId = null;
+const selected = new Set();    // bulk-select set of skin ids
 let saveTimer = null;
 const CACHE = "https://cache.skin/";
 
@@ -56,6 +57,7 @@ function skincreate(s) { return `/skincreate ${s.shortname || "<shortname>"} ${s
 function slug(t) {
   return "skin_" + (t || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "skin_" + uid("");
 }
+function applyZoom(px) { $("#grid").style.setProperty("--tile", px + "px"); }
 
 // ── item-type classifier (from shortname) for the type filter ────────────
 const TYPE_DEFS = [
@@ -63,9 +65,21 @@ const TYPE_DEFS = [
   ["lmg", "LMGs"], ["bow", "Bows"], ["explosive", "Explosives"], ["melee", "Melee/Tools"],
   ["clothing", "Clothing"], ["deployable", "Deployables"], ["other", "Other"],
 ];
+const CLOTHING = new Set([
+  "ballistic.helmet", "metal.facemask", "coffeecan.helmet", "wood.armor.helmet", "knightsarmour.helmet",
+  "hat.wolf", "bucket.helmet", "deer.skull.mask", "nightvisiongoggles", "ballistic.vest", "metal.plate.torso",
+  "roadsign.jacket", "jacket", "wood.armor.jacket", "attire.hide.poncho", "jacket.snow", "draculacape",
+  "knighttorso.armour", "hoodie", "tshirt", "burlap.shirt", "tanktop", "attire.hide.helterneck", "tactical.gloves",
+  "roadsign.gloves", "burlap.gloves", "woodarmor.gloves", "burlap.gloves.new", "ballistic.legarmor", "roadsign.kilt",
+  "knightsarmour.skirt", "wood.armor.pants", "chicken.costume", "horse.costume", "pants", "burlap.trousers",
+  "pants.shorts", "attire.hide.pants", "attire.hide.skirt", "shoes.boots", "attire.hide.boots", "boots.frog",
+  "burlap.shoes", "hazmatsuit", "hazmatsuit.nomadsuit", "hazmatsuit.lumberjack", "hazmatsuit.arcticsuit",
+  "ninjasuit", "attire.egg.suit",
+]);
 function typeOf(s) {
   const sn = (s.shortname || "").toLowerCase();
   if (!sn) return "other";
+  if (CLOTHING.has(sn)) return "clothing";
   if (sn.startsWith("rifle.")) return "rifle";
   if (sn.startsWith("smg.")) return "smg";
   if (sn.startsWith("pistol.")) return "pistol";
@@ -88,7 +102,7 @@ function inGroup(s) {
   if (activeGroup === "all") return true;
   return s.groupId === activeGroup;
 }
-function renderAll() { renderGroups(); renderTypeBar(); renderGrid(); }
+function renderAll() { renderGroups(); renderTypeBar(); renderGrid(); renderBulkBar(); }
 
 // ── render: groups sidebar ───────────────────────────────────────────────
 function renderGroups() {
@@ -172,7 +186,15 @@ function renderGrid() {
   for (const s of list) {
     const tile = el("div", "tile");
     if (s.id === selectedId) tile.classList.add("sel");
+    if (selected.has(s.id)) tile.classList.add("checked");
     tile.onclick = () => openDetail(s.id);
+
+    const chk = el("input", "tcheck");
+    chk.type = "checkbox";
+    chk.checked = selected.has(s.id);
+    chk.title = "Select for bulk actions";
+    chk.onclick = (ev) => { ev.stopPropagation(); toggleSelect(s.id); };
+    tile.append(chk);
 
     const thumb = el("div", "thumb");
     const img = el("img");
@@ -217,6 +239,45 @@ async function ensureImages(items) {
     // refresh just the now-cached tiles' images
     renderGrid();
   } catch {}
+}
+
+// ── bulk selection ───────────────────────────────────────────────────────
+function toggleSelect(id) {
+  if (selected.has(id)) selected.delete(id); else selected.add(id);
+  renderGrid(); renderBulkBar();
+}
+function renderBulkBar() {
+  const bar = $("#bulkbar");
+  bar.innerHTML = "";
+  if (!selected.size) { bar.classList.add("hidden"); return; }
+  bar.classList.remove("hidden");
+  bar.append(el("span", "bcount", selected.size + " selected"));
+
+  const sel = el("select");
+  sel.append(Object.assign(el("option"), { value: "", textContent: "Move to…" }));
+  sel.append(Object.assign(el("option"), { value: "__ungroup", textContent: "Ungrouped" }));
+  for (const g of lib.groups) sel.append(Object.assign(el("option"), { value: g.id, textContent: g.name }));
+  sel.onchange = () => {
+    if (!sel.value) return;
+    const gid = sel.value === "__ungroup" ? null : sel.value;
+    let n = 0;
+    for (const s of lib.skins) if (selected.has(s.id)) { s.groupId = gid; n++; }
+    save(); selected.clear(); renderAll();
+    toast(`Moved ${n} skin(s) ${gid ? "to " + (groupById(gid)?.name || "group") : "to ungrouped"}`);
+  };
+  bar.append(sel);
+
+  const clear = el("button", "ghost", "Clear");
+  clear.onclick = () => { selected.clear(); renderGrid(); renderBulkBar(); };
+  bar.append(clear);
+
+  const del = el("button", "ghost danger", "Delete");
+  del.onclick = () => {
+    if (!confirm(`Remove ${selected.size} selected skin(s) from the library?`)) return;
+    lib.skins = lib.skins.filter((s) => !selected.has(s.id));
+    selected.clear(); save(); renderAll();
+  };
+  bar.append(del);
 }
 
 // ── detail panel ─────────────────────────────────────────────────────────
@@ -403,9 +464,10 @@ async function addSource() {
 
   busy(true, "Resolving workshop…");
   try {
-    const res = await call("addSource", { input });
+    const res = await call("addSource", { input, catalogFilter: $("#catalogFilter").checked });
     busy(false);
-    if (!res.skins.length) return toast("Nothing found (private/removed item?)", true);
+    if (!res.skins.length)
+      return toast(res.dropped ? `All ${res.dropped} skin(s) were off-catalog (filter on)` : "Nothing found (private/removed item?)", true);
     let added = 0, updated = 0;
     for (const ns of res.skins) {
       const ex = lib.skins.find((x) => x.id === ns.id);
@@ -414,7 +476,9 @@ async function addSource() {
     }
     save(); renderAll();
     $("#srcInput").value = "";
-    toast(`${res.isCollection ? "Collection" : "Item"}: +${added} new, ${updated} updated`);
+    if (res.dropped) console.log("Dropped (off-catalog):", res.droppedTitles);
+    toast(`${res.isCollection ? "Collection" : "Item"}: +${added} new, ${updated} updated`
+      + (res.dropped ? ` · ${res.dropped} off-catalog dropped` : ""));
   } catch (e) { busy(false); toast(e.message, true); }
 }
 
@@ -505,6 +569,14 @@ async function loadMissions() {
 $("#srcAdd").onclick = addSource;
 $("#srcInput").addEventListener("keydown", (e) => { if (e.key === "Enter") addSource(); });
 $("#search").addEventListener("input", (e) => { query = e.target.value; renderGrid(); });
+$("#zoom").addEventListener("input", (e) => { applyZoom(e.target.value); localStorage.setItem("zoom", e.target.value); });
+$("#catalogFilter").addEventListener("change", (e) => localStorage.setItem("catalogFilter", e.target.checked));
+$("#selectAll").onclick = () => {
+  const vis = visibleSkins();
+  const allSel = vis.length && vis.every((s) => selected.has(s.id));
+  vis.forEach((s) => allSel ? selected.delete(s.id) : selected.add(s.id));
+  renderGrid(); renderBulkBar();
+};
 $("#addGroup").onclick = () => newGroup();
 $("#manageGroups").onclick = () => openGroupManager();
 $("#groupModalClose").onclick = closeGroupManager;
@@ -518,7 +590,8 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (!$("#groupModal").classList.contains("hidden")) { closeGroupManager(); return; }
   if (!$("#genModal").classList.contains("hidden")) { closeGen(); return; }
-  closeDetail();
+  if (!$("#detail").classList.contains("hidden")) { closeDetail(); return; }
+  if (selected.size) { selected.clear(); renderGrid(); renderBulkBar(); }
 });
 
 // ── boot ─────────────────────────────────────────────────────────────────
@@ -528,5 +601,10 @@ document.addEventListener("keydown", (e) => {
     lib.groups = lib.groups || [];
     lib.skins = lib.skins || [];
   } catch { lib = { groups: [], skins: [] }; }
+  // restore UI prefs (localStorage persists per-origin in the WebView2 profile)
+  const z = parseInt(localStorage.getItem("zoom") || "158", 10);
+  $("#zoom").value = z; applyZoom(z);
+  const cf = localStorage.getItem("catalogFilter");
+  $("#catalogFilter").checked = (cf === null) ? true : (cf === "true");
   renderAll();
 })();

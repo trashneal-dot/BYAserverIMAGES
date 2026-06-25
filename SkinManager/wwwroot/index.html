@@ -14,6 +14,9 @@
       <input id="srcInput" type="text" placeholder="Paste a Workshop collection link, item link, or id…" />
       <select id="srcGroup" title="Add into group"></select>
       <button id="srcAdd" class="primary">Add</button>
+      <label class="chk" title="Silently drop skins for items not in the server weapon/clothing catalog">
+        <input type="checkbox" id="catalogFilter" checked /> Catalog only
+      </label>
     </div>
 
     <div class="topright">
@@ -40,7 +43,14 @@
     </aside>
 
     <section id="content">
-      <div id="typebar" class="typebar hidden"></div>
+      <div class="gridtools">
+        <div id="typebar" class="typebar hidden"></div>
+        <button id="selectAll" class="ghost" title="Select / clear all shown">Select all</button>
+        <div class="zoomwrap">
+          <span class="zlabel">Zoom</span>
+          <input id="zoom" type="range" min="110" max="280" step="10" value="158" title="Tile size" />
+        </div>
+      </div>
       <div id="grid"></div>
       <div id="empty" class="empty hidden">
         <p>No skins yet.</p>
@@ -54,6 +64,7 @@
     </aside>
   </div>
 
+  <div id="bulkbar" class="bulkbar hidden"></div>
   <div id="toast" class="toast hidden"></div>
   <div id="busy" class="busy hidden"><div class="spinner"></div><span id="busyText">Working…</span></div>
 
