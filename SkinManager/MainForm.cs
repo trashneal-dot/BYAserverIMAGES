@@ -122,7 +122,7 @@ namespace SkengSkinManager
                 }
 
                 case "addSource":
-                    return await AddSource((string)a["input"], (bool?)a["catalogFilter"] ?? true);
+                    return await AddSource((string)a["input"], (bool?)a["catalogFilter"] ?? true, (bool?)a["dropOfficial"] ?? true);
 
                 case "ensureImages":
                     return await EnsureImages(a["items"] as JArray);
@@ -155,11 +155,16 @@ namespace SkengSkinManager
             }
         }
 
+        // A skin Facepunch has accepted into the game carries the "Approved"
+        // Workshop tag (custom/workshop-only skins do not — they carry Version*).
+        private static bool IsApproved(List<string> tags) =>
+            tags != null && tags.Any(t => string.Equals(t, "Approved", StringComparison.OrdinalIgnoreCase));
+
         // Resolve a collection link/single link/bare id -> resolved skin entries.
-        // When catalogFilter is on, skins whose item tag doesn't resolve to a
-        // server catalog item (ShortnameMap) are silently dropped — only what we
-        // actually use survives. The dropped titles are reported back.
-        private async Task<object> AddSource(string input, bool catalogFilter)
+        //   dropOfficial  : drop skins accepted into the game ("Approved" tag).
+        //   catalogFilter : drop skins whose item isn't in the server catalog.
+        // Only what survives both is kept; the drop counts/titles are reported.
+        private async Task<object> AddSource(string input, bool catalogFilter, bool dropOfficial)
         {
             var id = Steam.ParseId(input);
             if (id == null) throw new Exception("No workshop id found in: " + input);
@@ -169,9 +174,11 @@ namespace SkengSkinManager
             var details = await Steam.GetDetails(ids);
 
             var dropped = new List<string>();
+            int official = 0;
             var kept = new List<Steam.Detail>();
             foreach (var d in details)
             {
+                if (dropOfficial && IsApproved(d.Tags)) { official++; continue; }
                 if (catalogFilter && !ShortnameMap.IsCatalogItem(d.Tags))
                 {
                     // Record the real item tags so any over-drop is one-glance
@@ -180,9 +187,9 @@ namespace SkengSkinManager
                         .Where(t => t != "Skin" && t != "Approved" && t != "PlayerWearable"
                                     && !t.StartsWith("Version"));
                     dropped.Add($"{d.Title ?? d.Id}  [{string.Join(", ", itemTags)}]");
+                    continue;
                 }
-                else
-                    kept.Add(d);
+                kept.Add(d);
             }
 
             // Cache preview images only for kept skins (the one acceptable
@@ -211,6 +218,7 @@ namespace SkengSkinManager
                 isCollection = children.Count > 0,
                 count = skins.Count,
                 dropped = dropped.Count,
+                official,
                 droppedTitles = dropped.Take(40).ToList(),
                 skins,
             };

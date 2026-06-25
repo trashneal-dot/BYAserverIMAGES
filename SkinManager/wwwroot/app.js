@@ -464,10 +464,14 @@ async function addSource() {
 
   busy(true, "Resolving workshop…");
   try {
-    const res = await call("addSource", { input, catalogFilter: $("#catalogFilter").checked });
+    const res = await call("addSource", { input, catalogFilter: $("#catalogFilter").checked, dropOfficial: $("#dropOfficial").checked });
     busy(false);
-    if (!res.skins.length)
-      return toast(res.dropped ? `All ${res.dropped} skin(s) were off-catalog (filter on)` : "Nothing found (private/removed item?)", true);
+    if (!res.skins.length) {
+      const why = [];
+      if (res.dropped) why.push(`${res.dropped} off-catalog`);
+      if (res.official) why.push(`${res.official} official`);
+      return toast(why.length ? `Nothing kept (${why.join(", ")} dropped)` : "Nothing found (private/removed item?)", true);
+    }
     let added = 0, updated = 0;
     for (const ns of res.skins) {
       const ex = lib.skins.find((x) => x.id === ns.id);
@@ -478,7 +482,8 @@ async function addSource() {
     $("#srcInput").value = "";
     if (res.dropped) console.log("Dropped (off-catalog):", res.droppedTitles);
     toast(`${res.isCollection ? "Collection" : "Item"}: +${added} new, ${updated} updated`
-      + (res.dropped ? ` · ${res.dropped} off-catalog dropped` : ""));
+      + (res.dropped ? ` · ${res.dropped} off-catalog` : "")
+      + (res.official ? ` · ${res.official} official` : ""));
   } catch (e) { busy(false); toast(e.message, true); }
 }
 
@@ -571,6 +576,7 @@ $("#srcInput").addEventListener("keydown", (e) => { if (e.key === "Enter") addSo
 $("#search").addEventListener("input", (e) => { query = e.target.value; renderGrid(); });
 $("#zoom").addEventListener("input", (e) => { applyZoom(e.target.value); localStorage.setItem("zoom", e.target.value); });
 $("#catalogFilter").addEventListener("change", (e) => localStorage.setItem("catalogFilter", e.target.checked));
+$("#dropOfficial").addEventListener("change", (e) => localStorage.setItem("dropOfficial", e.target.checked));
 $("#selectAll").onclick = () => {
   const vis = visibleSkins();
   const allSel = vis.length && vis.every((s) => selected.has(s.id));
@@ -606,5 +612,7 @@ document.addEventListener("keydown", (e) => {
   $("#zoom").value = z; applyZoom(z);
   const cf = localStorage.getItem("catalogFilter");
   $("#catalogFilter").checked = (cf === null) ? true : (cf === "true");
+  const of = localStorage.getItem("dropOfficial");
+  $("#dropOfficial").checked = (of === null) ? true : (of === "true");
   renderAll();
 })();
