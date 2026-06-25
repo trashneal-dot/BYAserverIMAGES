@@ -23,6 +23,7 @@ function call(method, args = {}) {
 let lib = { groups: [], skins: [] };
 let activeGroup = "all";
 let activeType = "all";
+let usageMode = "all";   // all | unused | used (needs missions.json loaded)
 let query = "";
 let missions = null;          // { path, missions:[], skinUsage:{id:[keys]} }
 let selectedId = null;
@@ -147,6 +148,8 @@ function visibleSkins() {
   return lib.skins.filter((s) => {
     if (!inGroup(s)) return false;
     if (activeType !== "all" && typeOf(s) !== activeType) return false;
+    if (usageMode === "used" && !usage(s.id).length) return false;
+    if (usageMode === "unused" && usage(s.id).length) return false;
     if (!q) return true;
     return (s.title || "").toLowerCase().includes(q)
       || (s.shortname || "").toLowerCase().includes(q)
@@ -195,6 +198,13 @@ function renderGrid() {
     chk.title = "Select for bulk actions";
     chk.onclick = (ev) => { ev.stopPropagation(); toggleSelect(s.id); };
     tile.append(chk);
+
+    if (usage(s.id).length) {
+      tile.classList.add("used");
+      const flag = Object.assign(el("span", "usedflag"), { textContent: "USED" });
+      flag.title = "Used in: " + usage(s.id).join(", ");
+      tile.append(flag);
+    }
 
     const thumb = el("div", "thumb");
     const img = el("img");
@@ -325,6 +335,12 @@ function openDetail(id) {
   const cbtn = el("button", "primary", "Copy");
   cbtn.onclick = () => { call("copy", { text: skincreate(s) }); toast("Copied to clipboard"); };
   cmd.append(code, cbtn); cmdF.append(cmd);
+  // Second row: copy just the skin id.
+  const idRow = el("div", "cmd");
+  const idCode = el("code", null, s.id);
+  const idBtn = el("button", "primary", "Copy ID");
+  idBtn.onclick = () => { call("copy", { text: s.id }); toast("Copied skin id"); };
+  idRow.append(idCode, idBtn); cmdF.append(idRow);
   cmdF.append(Object.assign(el("p", "note"), { textContent: "Paste in the F1 console in-game to preview. (/skinapply " + s.id + " skins the held item instead.)" }));
   d.append(cmdF);
 
@@ -577,6 +593,7 @@ $("#search").addEventListener("input", (e) => { query = e.target.value; renderGr
 $("#zoom").addEventListener("input", (e) => { applyZoom(e.target.value); localStorage.setItem("zoom", e.target.value); });
 $("#catalogFilter").addEventListener("change", (e) => localStorage.setItem("catalogFilter", e.target.checked));
 $("#dropOfficial").addEventListener("change", (e) => localStorage.setItem("dropOfficial", e.target.checked));
+$("#usageFilter").addEventListener("change", (e) => { usageMode = e.target.value; renderGrid(); });
 $("#selectAll").onclick = () => {
   const vis = visibleSkins();
   const allSel = vis.length && vis.every((s) => selected.has(s.id));

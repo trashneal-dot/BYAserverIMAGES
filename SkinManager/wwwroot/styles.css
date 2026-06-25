@@ -105,6 +105,12 @@ input:focus, select:focus { border-color: var(--accent); }
   accent-color: var(--accent); cursor: pointer; opacity: 0;
 }
 .tile:hover .tcheck, .tile.checked .tcheck { opacity: 1; }
+.tile.used { border-color: var(--good); }
+.usedflag {
+  position: absolute; top: 6px; right: 6px; z-index: 2; pointer-events: none;
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  padding: 2px 6px; border-radius: 10px; background: var(--good); color: #11201a;
+}
 .tile .thumb {
   width: 100%; aspect-ratio: 1/1; background: #0e0e12 center/cover no-repeat;
   display: flex; align-items: center; justify-content: center; color: var(--faint); font-size: 11px;
