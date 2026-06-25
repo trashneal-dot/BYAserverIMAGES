@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>SkengSkinManager</AssemblyName>
+    <RootNamespace>SkengSkinManager</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <!-- Single-file friendly; no native crunch needed -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Floating 1.0.* so restore picks whatever WebView2 SDK is available.
+         If your feed pins it, run: dotnet add package Microsoft.Web.WebView2 -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.*" />
+    <!-- Same serializer the plugin uses, so BYAMissionDef JSON round-trips 1:1 -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The web UI is copied next to the exe and served from a virtual host -->
+    <Content Include="wwwroot\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

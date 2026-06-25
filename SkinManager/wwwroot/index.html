@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Skeng Skin Manager</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">SKENG <span>SKIN MANAGER</span></div>
+
+    <div class="addbar">
+      <input id="srcInput" type="text" placeholder="Paste a Workshop collection link, item link, or id…" />
+      <select id="srcGroup" title="Add into group"></select>
+      <button id="srcAdd" class="primary">Add</button>
+    </div>
+
+    <div class="topright">
+      <input id="search" type="text" placeholder="Search skins…" />
+      <button id="loadMissions" title="Cross-reference a missions.json">Load missions.json</button>
+      <span id="missionState" class="muted"></span>
+    </div>
+  </header>
+
+  <div id="main">
+    <aside id="sidebar">
+      <div class="side-head">
+        <span>GROUPS</span>
+        <button id="addGroup" title="New group">+</button>
+      </div>
+      <ul id="groupList"></ul>
+      <div class="side-foot">
+        <div class="stat"><b id="statSkins">0</b> skins</div>
+        <div class="stat"><b id="statGroups">0</b> groups</div>
+      </div>
+    </aside>
+
+    <section id="content">
+      <div id="grid"></div>
+      <div id="empty" class="empty hidden">
+        <p>No skins yet.</p>
+        <p class="muted">Paste a Workshop collection or item link above and hit <b>Add</b>.</p>
+      </div>
+    </section>
+
+    <aside id="detail" class="hidden">
+      <button id="detailClose" class="x">×</button>
+      <div id="detailBody"></div>
+    </aside>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <div id="busy" class="busy hidden"><div class="spinner"></div><span id="busyText">Working…</span></div>
+
+  <!-- Mission generator modal -->
+  <div id="genModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <span>Generate mission</span>
+        <button id="genClose" class="x">×</button>
+      </div>
+      <div id="genBody"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
