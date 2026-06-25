@@ -101,6 +101,7 @@ namespace SkengSkinManager
         public string previewUrl;
         public bool cached;          // image present at cache.skin/<id>.jpg
         public bool banned;          // workshop item banned/removed
+        public bool used;            // manually marked "used in a mission" (reserved)
         public string addedAt;
     }
 }

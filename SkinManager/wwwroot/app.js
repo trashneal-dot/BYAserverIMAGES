@@ -53,6 +53,8 @@ function save() {
 function uid(p) { return p + Math.random().toString(36).slice(2, 8); }
 function groupById(id) { return lib.groups.find((g) => g.id === id); }
 function usage(id) { return (missions && missions.skinUsage && missions.skinUsage[id]) || []; }
+// "used / not available" = manually marked OR rewarded by a loaded mission.
+function isUsed(s) { return !!s.used || usage(s.id).length > 0; }
 function imgFor(s) { return CACHE + encodeURIComponent(s.id) + ".jpg"; }
 function skincreate(s) { return `/skincreate ${s.shortname || "<shortname>"} ${s.id}`; }
 function slug(t) {
@@ -99,7 +101,10 @@ function typeOf(s) {
   return "other";
 }
 function inGroup(s) {
-  if (activeGroup === "ungrouped") return !s.groupId || !groupById(s.groupId);
+  if (activeGroup === "used") return isUsed(s);
+  // Used skins leave the Ungrouped pool (not available) but stay in real groups
+  // and in All (rendered dimmed).
+  if (activeGroup === "ungrouped") return (!s.groupId || !groupById(s.groupId)) && !isUsed(s);
   if (activeGroup === "all") return true;
   return s.groupId === activeGroup;
 }
@@ -107,6 +112,7 @@ function renderAll() { renderGroups(); renderTypeBar(); renderGrid(); renderBulk
 
 // ── render: groups sidebar ───────────────────────────────────────────────
 function renderGroups() {
+  if (activeGroup === "used" && !lib.skins.some(isUsed)) activeGroup = "all";
   const ul = $("#groupList");
   ul.innerHTML = "";
   const mk = (id, name, color, count) => {
@@ -116,15 +122,17 @@ function renderGroups() {
     if (!color) dot.style.boxShadow = "inset 0 0 0 1px var(--border)";
     li.append(dot, el("span", "gname", name), el("span", "gcount", String(count)));
     li.onclick = () => { activeGroup = id; renderGroups(); renderTypeBar(); renderGrid(); };
-    if (id !== "all" && id !== "ungrouped") {
+    if (id !== "all" && id !== "ungrouped" && id !== "used") {
       li.ondblclick = () => openGroupManager(id);
       li.title = "Double-click to manage (rename / recolor / reorder / delete)";
     }
     ul.append(li);
   };
   mk("all", "All skins", "", lib.skins.length);
-  const ungrouped = lib.skins.filter((s) => !s.groupId || !groupById(s.groupId)).length;
+  const ungrouped = lib.skins.filter((s) => (!s.groupId || !groupById(s.groupId)) && !isUsed(s)).length;
   if (ungrouped) mk("ungrouped", "Ungrouped", "", ungrouped);
+  const usedN = lib.skins.filter(isUsed).length;
+  if (usedN) mk("used", "Used", "#7ac070", usedN);
   for (const g of lib.groups)
     mk(g.id, g.name, g.color, lib.skins.filter((s) => s.groupId === g.id).length);
 
@@ -148,8 +156,8 @@ function visibleSkins() {
   return lib.skins.filter((s) => {
     if (!inGroup(s)) return false;
     if (activeType !== "all" && typeOf(s) !== activeType) return false;
-    if (usageMode === "used" && !usage(s.id).length) return false;
-    if (usageMode === "unused" && usage(s.id).length) return false;
+    if (usageMode === "used" && !isUsed(s)) return false;
+    if (usageMode === "unused" && isUsed(s)) return false;
     if (!q) return true;
     return (s.title || "").toLowerCase().includes(q)
       || (s.shortname || "").toLowerCase().includes(q)
@@ -199,10 +207,12 @@ function renderGrid() {
     chk.onclick = (ev) => { ev.stopPropagation(); toggleSelect(s.id); };
     tile.append(chk);
 
-    if (usage(s.id).length) {
+    if (isUsed(s)) {
       tile.classList.add("used");
+      if (activeGroup !== "used") tile.classList.add("dim");   // "not available"
       const flag = Object.assign(el("span", "usedflag"), { textContent: "USED" });
-      flag.title = "Used in: " + usage(s.id).join(", ");
+      const u = usage(s.id);
+      flag.title = u.length ? "Used in: " + u.join(", ") : "Marked as used";
       tile.append(flag);
     }
 
@@ -276,6 +286,13 @@ function renderBulkBar() {
     toast(`Moved ${n} skin(s) ${gid ? "to " + (groupById(gid)?.name || "group") : "to ungrouped"}`);
   };
   bar.append(sel);
+
+  const markU = el("button", "ghost", "Mark used");
+  markU.onclick = () => { lib.skins.forEach((s) => { if (selected.has(s.id)) s.used = true; }); save(); selected.clear(); renderAll(); };
+  bar.append(markU);
+  const markA = el("button", "ghost", "Free");
+  markA.onclick = () => { lib.skins.forEach((s) => { if (selected.has(s.id)) s.used = false; }); save(); selected.clear(); renderAll(); };
+  bar.append(markA);
 
   const clear = el("button", "ghost", "Clear");
   clear.onclick = () => { selected.clear(); renderGrid(); renderBulkBar(); };
@@ -360,6 +377,10 @@ function openDetail(id) {
   gen.style.width = "100%";
   gen.onclick = () => openGen(s);
   acts.append(gen);
+  const usedBtn = el("button", "ghost", s.used ? "✓ Marked used — click to free" : "Mark as used (in mission)");
+  usedBtn.style.cssText = "width:100%;margin-top:8px";
+  usedBtn.onclick = () => { s.used = !s.used; save(); renderAll(); openDetail(id); };
+  acts.append(usedBtn);
   const wl = el("button", "ghost", "Open workshop page");
   wl.style.cssText = "width:100%;margin-top:8px";
   wl.onclick = () => call("openExternal", { url: "https://steamcommunity.com/sharedfiles/filedetails/?id=" + s.id });
@@ -462,7 +483,8 @@ function openGen(s) {
       code.textContent = res.command;
       copyBtn.disabled = false;
       copyBtn.onclick = () => { call("copy", { text: res.command }); toast("Command copied"); };
-      toast("Generated (" + res.length + " b64 chars)");
+      s.used = true; save(); renderAll();   // it now has a mission -> mark used
+      toast("Generated (" + res.length + " b64 chars) — skin marked used");
     } catch (e) { toast(e.message, true); }
   };
   b.append(genBtn);

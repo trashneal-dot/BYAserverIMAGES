@@ -106,6 +106,8 @@ input:focus, select:focus { border-color: var(--accent); }
 }
 .tile:hover .tcheck, .tile.checked .tcheck { opacity: 1; }
 .tile.used { border-color: var(--good); }
+.tile.dim { opacity: .42; }
+.tile.dim:hover { opacity: .8; }
 .usedflag {
   position: absolute; top: 6px; right: 6px; z-index: 2; pointer-events: none;
   font-size: 10px; font-weight: 700; letter-spacing: .5px;
