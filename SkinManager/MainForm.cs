@@ -173,7 +173,14 @@ namespace SkengSkinManager
             foreach (var d in details)
             {
                 if (catalogFilter && !ShortnameMap.IsCatalogItem(d.Tags))
-                    dropped.Add(d.Title ?? d.Id);
+                {
+                    // Record the real item tags so any over-drop is one-glance
+                    // fixable (add the tag to ShortnameMap's CATALOG).
+                    var itemTags = (d.Tags ?? new List<string>())
+                        .Where(t => t != "Skin" && t != "Approved" && t != "PlayerWearable"
+                                    && !t.StartsWith("Version"));
+                    dropped.Add($"{d.Title ?? d.Id}  [{string.Join(", ", itemTags)}]");
+                }
                 else
                     kept.Add(d);
             }
