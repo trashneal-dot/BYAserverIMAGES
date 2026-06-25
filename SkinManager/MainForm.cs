@@ -155,14 +155,10 @@ namespace SkengSkinManager
             }
         }
 
-        // A skin Facepunch has accepted into the game carries the "Approved"
-        // Workshop tag (custom/workshop-only skins do not — they carry Version*).
-        private static bool IsApproved(List<string> tags) =>
-            tags != null && tags.Any(t => string.Equals(t, "Approved", StringComparison.OrdinalIgnoreCase));
-
         // Resolve a collection link/single link/bare id -> resolved skin entries.
-        //   dropOfficial  : drop skins accepted into the game ("Approved" tag).
         //   catalogFilter : drop skins whose item isn't in the server catalog.
+        //   dropOfficial  : drop skins accepted into the game (Item Store), found
+        //                   by scraping the Workshop page (the API hides this).
         // Only what survives both is kept; the drop counts/titles are reported.
         private async Task<object> AddSource(string input, bool catalogFilter, bool dropOfficial)
         {
@@ -173,12 +169,12 @@ namespace SkengSkinManager
             var ids = children.Count > 0 ? children : new List<string> { id };
             var details = await Steam.GetDetails(ids);
 
+            // 1) Catalog filter (cheap, tag-based) first — so the page-scrape
+            //    below only runs on the survivors.
             var dropped = new List<string>();
-            int official = 0;
-            var kept = new List<Steam.Detail>();
+            var candidates = new List<Steam.Detail>();
             foreach (var d in details)
             {
-                if (dropOfficial && IsApproved(d.Tags)) { official++; continue; }
                 if (catalogFilter && !ShortnameMap.IsCatalogItem(d.Tags))
                 {
                     // Record the real item tags so any over-drop is one-glance
@@ -189,8 +185,20 @@ namespace SkengSkinManager
                     dropped.Add($"{d.Title ?? d.Id}  [{string.Join(", ", itemTags)}]");
                     continue;
                 }
-                kept.Add(d);
+                candidates.Add(d);
             }
+
+            // 2) Official/accepted filter (Workshop-page scrape). On fetch error
+            //    IsAccepted returns false, so the skin is kept (never wrongly cut).
+            int official = 0;
+            var kept = new List<Steam.Detail>();
+            if (dropOfficial)
+            {
+                var checks = await Task.WhenAll(
+                    candidates.Select(async d => (d, acc: await Steam.IsAccepted(d.Id))));
+                foreach (var c in checks) { if (c.acc) official++; else kept.Add(c.d); }
+            }
+            else kept.AddRange(candidates);
 
             // Cache preview images only for kept skins (the one acceptable
             // "loading" moment); browsing afterwards is instant from cache.skin.

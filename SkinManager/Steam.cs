@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
@@ -121,6 +122,28 @@ namespace SkengSkinManager
         public static async Task<byte[]> Download(string url)
         {
             return await Http.GetByteArrayAsync(url).ConfigureAwait(false);
+        }
+
+        // Throttle the page scrapes so a big collection doesn't hammer Steam.
+        private static readonly SemaphoreSlim AcceptGate = new SemaphoreSlim(8);
+
+        // A skin accepted into the game shows an Item Store link + "has been
+        // accepted" on its Workshop page; custom/workshop-only skins do not. The
+        // Steam API does not expose this, so we scrape the page. On any error we
+        // return false (keep the skin) rather than risk dropping a custom one.
+        public static async Task<bool> IsAccepted(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return false;
+            await AcceptGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                var html = await Http.GetStringAsync(
+                    $"https://steamcommunity.com/sharedfiles/filedetails/?id={id}").ConfigureAwait(false);
+                return html.IndexOf("store.steampowered.com/itemstore", StringComparison.OrdinalIgnoreCase) >= 0
+                    || html.IndexOf("has been accepted", StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            catch { return false; }
+            finally { AcceptGate.Release(); }
         }
     }
 }
