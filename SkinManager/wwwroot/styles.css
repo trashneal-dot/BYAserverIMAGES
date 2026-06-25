@@ -166,3 +166,31 @@ input:focus, select:focus { border-color: var(--accent); }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--raised); border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+/* ── type filter bar ─────────────────────────────────────── */
+.typebar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.tchip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; font-size: 12px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--dim);
+}
+.tchip:hover { border-color: var(--accent); }
+.tchip.active { background: var(--raised); color: var(--text); border-color: var(--accent); }
+.tchip .tc { font-size: 10px; color: var(--faint); }
+.tchip.active .tc { color: var(--accent); }
+
+/* ── sidebar manage buttons ──────────────────────────────── */
+.side-head-btns { display: flex; gap: 4px; }
+.side-head-btns button { padding: 0 8px; line-height: 22px; }
+
+/* ── group manager modal ─────────────────────────────────── */
+#groupModalBody { padding: 16px; }
+.grow { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.swatches { display: flex; gap: 3px; flex: none; }
+.sw { width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
+.sw:hover { border-color: var(--dim); }
+.sw.on { border-color: var(--text); }
+.gname-in { flex: 1; min-width: 70px; }
+.gcnt { font-size: 11px; color: var(--faint); white-space: nowrap; flex: none; }
+.gbtn { padding: 2px 8px; flex: none; }
+.gbtn:disabled { opacity: .35; cursor: default; border-color: var(--border); }

@@ -27,7 +27,10 @@
     <aside id="sidebar">
       <div class="side-head">
         <span>GROUPS</span>
-        <button id="addGroup" title="New group">+</button>
+        <span class="side-head-btns">
+          <button id="manageGroups" title="Manage groups (rename, recolor, reorder, delete)">&#9881;</button>
+          <button id="addGroup" title="Quick add group">+</button>
+        </span>
       </div>
       <ul id="groupList"></ul>
       <div class="side-foot">
@@ -37,6 +40,7 @@
     </aside>
 
     <section id="content">
+      <div id="typebar" class="typebar hidden"></div>
       <div id="grid"></div>
       <div id="empty" class="empty hidden">
         <p>No skins yet.</p>
@@ -61,6 +65,17 @@
         <button id="genClose" class="x">×</button>
       </div>
       <div id="genBody"></div>
+    </div>
+  </div>
+
+  <!-- Group manager modal -->
+  <div id="groupModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <span>Manage groups</span>
+        <button id="groupModalClose" class="x">×</button>
+      </div>
+      <div id="groupModalBody"></div>
     </div>
   </div>
 

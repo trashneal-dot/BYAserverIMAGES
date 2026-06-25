@@ -22,6 +22,7 @@ function call(method, args = {}) {
 // ── state ────────────────────────────────────────────────────────────────
 let lib = { groups: [], skins: [] };
 let activeGroup = "all";
+let activeType = "all";
 let query = "";
 let missions = null;          // { path, missions:[], skinUsage:{id:[keys]} }
 let selectedId = null;
@@ -56,6 +57,39 @@ function slug(t) {
   return "skin_" + (t || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "skin_" + uid("");
 }
 
+// ── item-type classifier (from shortname) for the type filter ────────────
+const TYPE_DEFS = [
+  ["rifle", "Rifles"], ["smg", "SMGs"], ["pistol", "Pistols"], ["shotgun", "Shotguns"],
+  ["lmg", "LMGs"], ["bow", "Bows"], ["explosive", "Explosives"], ["melee", "Melee/Tools"],
+  ["clothing", "Clothing"], ["deployable", "Deployables"], ["other", "Other"],
+];
+function typeOf(s) {
+  const sn = (s.shortname || "").toLowerCase();
+  if (!sn) return "other";
+  if (sn.startsWith("rifle.")) return "rifle";
+  if (sn.startsWith("smg.")) return "smg";
+  if (sn.startsWith("pistol.")) return "pistol";
+  if (sn.startsWith("shotgun.")) return "shotgun";
+  if (sn.startsWith("lmg.")) return "lmg";
+  if (sn.startsWith("bow.") || sn === "crossbow") return "bow";
+  if (sn.startsWith("rocket.") || sn.startsWith("grenade.") || sn.startsWith("explosive.") || sn === "multiplegrenadelauncher") return "explosive";
+  if (sn.startsWith("knife.") || sn.startsWith("salvaged.") || sn.startsWith("axe.") || sn.startsWith("icepick.") ||
+      ["machete", "hatchet", "pickaxe", "stonehatchet", "stone.pickaxe", "rock", "jackhammer", "chainsaw", "mace", "longsword", "torch"].includes(sn)) return "melee";
+  if (sn.startsWith("box.") || sn.startsWith("door.") || sn.startsWith("furnace") || sn.startsWith("cupboard.") ||
+      sn.startsWith("wall.frame.") || ["vending.machine", "locker", "target.reactive", "fridge", "sleepingbag", "rug"].includes(sn)) return "deployable";
+  if (sn.startsWith("hat.") || sn.endsWith(".helmet") || sn.endsWith(".facemask") || sn.startsWith("mask.") ||
+      sn.startsWith("burlap.") || sn.startsWith("roadsign.") || sn.startsWith("jacket.") || sn.startsWith("shoes.") ||
+      sn.startsWith("diving.") || sn.startsWith("attire.") || sn.startsWith("tshirt") ||
+      ["hoodie", "pants", "shorts", "metal.plate.torso"].includes(sn)) return "clothing";
+  return "other";
+}
+function inGroup(s) {
+  if (activeGroup === "ungrouped") return !s.groupId || !groupById(s.groupId);
+  if (activeGroup === "all") return true;
+  return s.groupId === activeGroup;
+}
+function renderAll() { renderGroups(); renderTypeBar(); renderGrid(); }
+
 // ── render: groups sidebar ───────────────────────────────────────────────
 function renderGroups() {
   const ul = $("#groupList");
@@ -66,10 +100,10 @@ function renderGroups() {
     const dot = el("span", "dot"); dot.style.background = color || "transparent";
     if (!color) dot.style.boxShadow = "inset 0 0 0 1px var(--border)";
     li.append(dot, el("span", "gname", name), el("span", "gcount", String(count)));
-    li.onclick = () => { activeGroup = id; renderGroups(); renderGrid(); };
+    li.onclick = () => { activeGroup = id; renderGroups(); renderTypeBar(); renderGrid(); };
     if (id !== "all" && id !== "ungrouped") {
-      li.ondblclick = () => editGroup(id);
-      li.title = "Double-click to rename / recolor / delete";
+      li.ondblclick = () => openGroupManager(id);
+      li.title = "Double-click to manage (rename / recolor / reorder / delete)";
     }
     ul.append(li);
   };
@@ -97,14 +131,35 @@ function renderGroups() {
 function visibleSkins() {
   const q = query.trim().toLowerCase();
   return lib.skins.filter((s) => {
-    if (activeGroup === "ungrouped") { if (s.groupId && groupById(s.groupId)) return false; }
-    else if (activeGroup !== "all" && s.groupId !== activeGroup) return false;
+    if (!inGroup(s)) return false;
+    if (activeType !== "all" && typeOf(s) !== activeType) return false;
     if (!q) return true;
     return (s.title || "").toLowerCase().includes(q)
       || (s.shortname || "").toLowerCase().includes(q)
       || s.id.includes(q)
       || (s.tags || []).some((t) => t.toLowerCase().includes(q));
   });
+}
+
+// type-filter chips above the grid. Counts are computed over the active group
+// (ignoring the type + search filters) so the bar is stable while you type.
+function renderTypeBar() {
+  const bar = $("#typebar");
+  bar.innerHTML = "";
+  const set = lib.skins.filter(inGroup);
+  if (!set.length) { bar.classList.add("hidden"); return; }
+  const counts = {};
+  for (const s of set) { const t = typeOf(s); counts[t] = (counts[t] || 0) + 1; }
+  if (activeType !== "all" && !counts[activeType]) activeType = "all";  // stale -> reset
+  bar.classList.remove("hidden");
+  const chip = (key, label, count) => {
+    const c = el("button", "tchip" + (activeType === key ? " active" : ""));
+    c.append(el("span", "tl", label), el("span", "tc", String(count)));
+    c.onclick = () => { activeType = key; renderTypeBar(); renderGrid(); };
+    bar.append(c);
+  };
+  chip("all", "All", set.length);
+  for (const [k, label] of TYPE_DEFS) if (counts[k]) chip(k, label, counts[k]);
 }
 
 function renderGrid() {
@@ -185,7 +240,7 @@ function openDetail(id) {
   f1.append(Object.assign(el("label"), { textContent: "ITEM SHORTNAME (for /skincreate + skin reward)" }));
   const c1 = el("div", "ctl");
   const inp = el("input"); inp.value = s.shortname || ""; inp.placeholder = "e.g. rifle.ak";
-  inp.onchange = () => { s.shortname = inp.value.trim(); s.shortnameAuto = false; save(); renderGrid(); openDetail(id); };
+  inp.onchange = () => { s.shortname = inp.value.trim(); s.shortnameAuto = false; save(); renderAll(); openDetail(id); };
   c1.append(inp); f1.append(c1);
   if (s.shortnameAuto && s.shortname) f1.append(Object.assign(el("p", "note"), { textContent: "Auto-suggested from tags — edit to confirm." }));
   d.append(f1);
@@ -198,7 +253,7 @@ function openDetail(id) {
   gs.append(Object.assign(el("option"), { value: "", textContent: "— ungrouped —" }));
   for (const g of lib.groups) gs.append(Object.assign(el("option"), { value: g.id, textContent: g.name }));
   gs.value = s.groupId || "";
-  gs.onchange = () => { s.groupId = gs.value || null; save(); renderGroups(); renderGrid(); };
+  gs.onchange = () => { s.groupId = gs.value || null; save(); renderAll(); };
   c2.append(gs); f2.append(c2); d.append(f2);
 
   // /skincreate command
@@ -234,7 +289,7 @@ function openDetail(id) {
   acts.append(wl);
   const del = el("button", "ghost danger", "Remove from library");
   del.style.cssText = "width:100%;margin-top:8px";
-  del.onclick = () => { if (confirm("Remove this skin from the library?")) { lib.skins = lib.skins.filter((x) => x.id !== id); selectedId = null; save(); closeDetail(); renderGroups(); renderGrid(); } };
+  del.onclick = () => { if (confirm("Remove this skin from the library?")) { lib.skins = lib.skins.filter((x) => x.id !== id); selectedId = null; save(); $("#detail").classList.add("hidden"); renderAll(); } };
   acts.append(del);
   d.append(acts);
 
@@ -357,7 +412,7 @@ async function addSource() {
       if (ex) { ex.title = ns.title; ex.tags = ns.tags; ex.previewUrl = ns.previewUrl; ex.cached = ns.cached; ex.banned = ns.banned; if (!ex.shortname) { ex.shortname = ns.shortname; ex.shortnameAuto = ns.shortnameAuto; } if (groupId) ex.groupId = groupId; updated++; }
       else { ns.groupId = groupId || null; lib.skins.push(ns); added++; }
     }
-    save(); renderGroups(); renderGrid();
+    save(); renderAll();
     $("#srcInput").value = "";
     toast(`${res.isCollection ? "Collection" : "Item"}: +${added} new, ${updated} updated`);
   } catch (e) { busy(false); toast(e.message, true); }
@@ -373,19 +428,62 @@ function newGroup() {
   $("#srcGroup").value = g.id;
   return g;
 }
-function editGroup(id) {
-  const g = groupById(id); if (!g) return;
-  const name = prompt("Rename group (clear + OK to delete):", g.name);
-  if (name === null) return;
-  if (name.trim() === "") {
-    if (!confirm(`Delete group "${g.name}"? Skins become ungrouped.`)) return;
-    lib.skins.forEach((s) => { if (s.groupId === id) s.groupId = null; });
-    lib.groups = lib.groups.filter((x) => x.id !== id);
-    if (activeGroup === id) activeGroup = "all";
-  } else {
-    g.name = name.trim();
-  }
-  save(); renderGroups(); renderGrid();
+// Full group manager modal: rename, recolor, reorder, delete + add.
+let gmFocus = null;
+function openGroupManager(focusId) { gmFocus = focusId || null; renderGroupManager(); $("#groupModal").classList.remove("hidden"); }
+function closeGroupManager() { $("#groupModal").classList.add("hidden"); gmFocus = null; }
+function renderGroupManager() {
+  const body = $("#groupModalBody");
+  body.innerHTML = "";
+  if (!lib.groups.length)
+    body.append(Object.assign(el("p", "muted"), { textContent: "No groups yet — add one below." }));
+
+  lib.groups.forEach((g, idx) => {
+    const row = el("div", "grow");
+
+    const sw = el("div", "swatches");
+    for (const col of PALETTE) {
+      const b = el("button", "sw" + (g.color === col ? " on" : ""));
+      b.style.background = col;
+      b.title = col;
+      b.onclick = () => { g.color = col; save(); renderGroupManager(); renderGroups(); renderGrid(); };
+      sw.append(b);
+    }
+
+    const name = el("input", "gname-in");
+    name.value = g.name;
+    name.onchange = () => { g.name = (name.value.trim() || g.name); save(); renderGroups(); };
+    if (gmFocus === g.id) setTimeout(() => { name.focus(); name.select(); }, 0);
+
+    const cnt = el("span", "gcnt", lib.skins.filter((s) => s.groupId === g.id).length + " skins");
+
+    const up = el("button", "gbtn", "↑"); up.disabled = idx === 0;
+    up.onclick = () => { [lib.groups[idx - 1], lib.groups[idx]] = [lib.groups[idx], lib.groups[idx - 1]]; save(); renderGroupManager(); renderGroups(); };
+    const dn = el("button", "gbtn", "↓"); dn.disabled = idx === lib.groups.length - 1;
+    dn.onclick = () => { [lib.groups[idx + 1], lib.groups[idx]] = [lib.groups[idx], lib.groups[idx + 1]]; save(); renderGroupManager(); renderGroups(); };
+
+    const del = el("button", "gbtn danger", "✕");
+    del.title = "Delete group (its skins become ungrouped)";
+    del.onclick = () => {
+      const n = lib.skins.filter((s) => s.groupId === g.id).length;
+      if (!confirm(`Delete "${g.name}"?` + (n ? ` ${n} skin(s) become ungrouped.` : ""))) return;
+      lib.skins.forEach((s) => { if (s.groupId === g.id) s.groupId = null; });
+      lib.groups = lib.groups.filter((x) => x.id !== g.id);
+      if (activeGroup === g.id) activeGroup = "all";
+      save(); renderGroupManager(); renderAll();
+    };
+
+    row.append(sw, name, cnt, up, dn, del);
+    body.append(row);
+  });
+
+  const add = el("button", "primary", "+ Add group");
+  add.style.cssText = "width:100%;margin-top:12px";
+  add.onclick = () => {
+    const g = { id: uid("g_"), name: "New group", color: PALETTE[lib.groups.length % PALETTE.length] };
+    lib.groups.push(g); gmFocus = g.id; save(); renderGroupManager(); renderGroups();
+  };
+  body.append(add);
 }
 
 // ── missions cross-ref ───────────────────────────────────────────────────
@@ -408,12 +506,20 @@ $("#srcAdd").onclick = addSource;
 $("#srcInput").addEventListener("keydown", (e) => { if (e.key === "Enter") addSource(); });
 $("#search").addEventListener("input", (e) => { query = e.target.value; renderGrid(); });
 $("#addGroup").onclick = () => newGroup();
+$("#manageGroups").onclick = () => openGroupManager();
+$("#groupModalClose").onclick = closeGroupManager;
+$("#groupModal").addEventListener("click", (e) => { if (e.target.id === "groupModal") closeGroupManager(); });
 $("#loadMissions").onclick = loadMissions;
 $("#detailClose").onclick = closeDetail;
 $("#genClose").onclick = closeGen;
 $("#genModal").addEventListener("click", (e) => { if (e.target.id === "genModal") closeGen(); });
 $("#srcGroup").addEventListener("change", (e) => { if (e.target.value === "__new") { const g = newGroup(); if (!g) e.target.value = ""; } });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeGen(); if (!$("#genModal").classList.contains("hidden")) return; closeDetail(); } });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!$("#groupModal").classList.contains("hidden")) { closeGroupManager(); return; }
+  if (!$("#genModal").classList.contains("hidden")) { closeGen(); return; }
+  closeDetail();
+});
 
 // ── boot ─────────────────────────────────────────────────────────────────
 (async function boot() {
@@ -422,6 +528,5 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeGen
     lib.groups = lib.groups || [];
     lib.skins = lib.skins || [];
   } catch { lib = { groups: [], skins: [] }; }
-  renderGroups();
-  renderGrid();
+  renderAll();
 })();
